@@ -1,0 +1,27 @@
+[
+  {
+    "package": "turn",
+    "upstream_commit": "1da3fe8ee84db8d266322cbcfcb357c745959a8e",
+    "upstream_path": "turn"
+  },
+  {
+    "package": "webrtc-ice",
+    "upstream_commit": "a1f8f1919235d8452835852e018efd654f2f8366",
+    "upstream_path": "ice"
+  },
+  {
+    "package": "leptos_macro",
+    "upstream_commit": "58fe6c1ad0cd175e9c8ec204895a9739d52fda16",
+    "upstream_path": "leptos_macro"
+  },
+  {
+    "package": "tachys",
+    "upstream_commit": "584c3a2d884b0e4dba9e3f822a9b6982cff072c7",
+    "upstream_path": "tachys"
+  },
+  {
+    "package": "objc2-foundation",
+    "upstream_commit": "e282618be4c3a3b9542957e0c8540e9588472ce8",
+    "upstream_path": "framework-crates/objc2-foundation"
+  }
+]
