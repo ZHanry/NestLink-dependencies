@@ -2,6 +2,7 @@
 mod server_test;
 
 pub mod config;
+mod nonce;
 pub mod request;
 
 use std::collections::HashMap;
@@ -56,6 +57,7 @@ impl Server {
 
         for p in config.conn_configs.into_iter() {
             let nonces = Arc::clone(&s.nonces);
+            let nonce_key = Arc::new(nonce::NonceKey::new());
             let auth_handler = Arc::clone(&s.auth_handler);
             let realm = s.realm.clone();
             let channel_bind_timeout = s.channel_bind_timeout;
@@ -70,6 +72,7 @@ impl Server {
                 conn,
                 allocation_manager,
                 nonces,
+                nonce_key,
                 auth_handler,
                 realm,
                 channel_bind_timeout,
@@ -141,6 +144,7 @@ impl Server {
         conn: Arc<dyn Conn + Send + Sync>,
         allocation_manager: Arc<Manager>,
         nonces: Arc<Mutex<HashMap<String, Instant>>>,
+        nonce_key: Arc<nonce::NonceKey>,
         auth_handler: Arc<dyn AuthHandler + Send + Sync>,
         realm: String,
         channel_bind_timeout: Duration,
@@ -201,6 +205,7 @@ impl Server {
                 buff: buf[..n].to_vec(),
                 allocation_manager: Arc::clone(&allocation_manager),
                 nonces: Arc::clone(&nonces),
+                nonce_key: Some(Arc::clone(&nonce_key)),
                 auth_handler: Arc::clone(&auth_handler),
                 realm: realm.clone(),
                 channel_bind_timeout,

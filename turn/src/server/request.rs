@@ -56,6 +56,7 @@ pub struct Request {
     // Server State
     pub allocation_manager: Arc<Manager>,
     pub nonces: Arc<Mutex<HashMap<String, Instant>>>,
+    pub(crate) nonce_key: Option<Arc<super::nonce::NonceKey>>,
 
     // User Configuration
     pub auth_handler: Arc<dyn AuthHandler + Send + Sync>,
@@ -76,6 +77,7 @@ impl Request {
             buff: vec![],
             allocation_manager,
             nonces: Arc::new(Mutex::new(HashMap::new())),
+            nonce_key: None,
             auth_handler,
             realm: String::new(),
             channel_bind_timeout: Duration::from_secs(0),
@@ -167,7 +169,13 @@ impl Request {
             return Ok(None);
         }
 
-        let to_be_deleted = {
+        let to_be_deleted = if let Some(key) = &self.nonce_key {
+            let now = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .map_err(|_| Error::ErrFailedToGenerateNonce)?
+                .as_secs();
+            !key.valid(self.src_addr, &nonce_attr.text, now)
+        } else {
             // Assert Nonce exists and is not expired
             let mut nonces = self.nonces.lock().await;
 
@@ -234,13 +242,26 @@ impl Request {
         calling_method: Method,
         response_code: ErrorCode,
     ) -> Result<()> {
-        let nonce = build_nonce()?;
+        let nonce = if let Some(key) = &self.nonce_key {
+            let now = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .map_err(|_| Error::ErrFailedToGenerateNonce)?
+                .as_secs();
+            key.issue(self.src_addr, now)
+                .ok_or(Error::ErrFailedToGenerateNonce)?
+        } else {
+            build_nonce()?
+        };
 
-        {
+        if self.nonce_key.is_none() {
             // Nonce has already been taken
             let mut nonces = self.nonces.lock().await;
             if nonces.contains_key(&nonce) {
                 return Err(Error::ErrDuplicatedNonce);
+            }
+            nonces.retain(|_, issued| issued.elapsed() < NONCE_LIFETIME);
+            if nonces.len() >= 4096 {
+                return Err(Error::ErrFailedToGenerateNonce);
             }
             nonces.insert(nonce.clone(), Instant::now());
         }
