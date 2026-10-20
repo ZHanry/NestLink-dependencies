@@ -3,13 +3,25 @@ use std::sync::Arc;
 use super::udp_mux::UDPMux;
 use super::Error;
 
+/// Application-owned socket creation for real interface routing. The returned
+/// socket is retained by its ICE candidate for STUN, checks and media traffic.
+pub type UdpSocketFactory =
+    Arc<dyn Fn(std::net::SocketAddr) -> std::io::Result<std::net::UdpSocket> + Send + Sync>;
+
 #[derive(Default, Clone)]
 pub struct EphemeralUDP {
     port_min: u16,
     port_max: u16,
+    socket_factory: Option<UdpSocketFactory>,
 }
 
 impl EphemeralUDP {
+    pub fn set_socket_factory(&mut self, factory: UdpSocketFactory) {
+        self.socket_factory = Some(factory);
+    }
+    pub fn socket_factory(&self) -> Option<UdpSocketFactory> {
+        self.socket_factory.clone()
+    }
     pub fn new(port_min: u16, port_max: u16) -> Result<Self, Error> {
         let mut s = Self::default();
         s.set_ports(port_min, port_max)?;

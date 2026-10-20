@@ -37,3 +37,13 @@ No registry cache source was edited. Actual browser/media verification is record
 separately in `docs/refactor/BROWSER-NATIVE-VERIFICATION.md`.
 
 RC source export: removed the upstream Codecov upload token from codecov.yml. Coverage upload credentials are not required to build or use this fork; runtime and license files are unchanged by this removal.
+
+0.7 RC socket routing: `EphemeralUDP` accepts an optional application socket
+factory. Host, STUN server-reflexive, mapped server-reflexive and UDP TURN
+gathering retain the socket returned by that factory as the candidate's live
+connection. The default factory and virtual-network behavior are unchanged.
+The owning application enforces address/interface policy; this fork does not
+infer VPN bypass from interface names. NestLink's `media_socket_factory`
+integration test performs a real local STUN exchange and subsequent UDP
+check/data exchanges through the same factory-created socket and source port.
+This test does not qualify an Internet peer path or TURN TCP/TLS routing.

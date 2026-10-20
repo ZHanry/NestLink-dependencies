@@ -145,8 +145,31 @@ pub async fn listen_udp_in_port_range(
     port_min: u16,
     laddr: SocketAddr,
 ) -> Result<Arc<dyn Conn + Send + Sync>> {
+    listen_udp_in_port_range_with_factory(vnet, port_max, port_min, laddr, None).await
+}
+
+async fn bind_with_factory(
+    vnet: &Arc<Net>,
+    address: SocketAddr,
+    factory: Option<&crate::udp_network::UdpSocketFactory>,
+) -> Result<Arc<dyn Conn + Send + Sync>> {
+    if let Some(factory) = factory {
+        let socket = factory(address)?;
+        socket.set_nonblocking(true)?;
+        return Ok(Arc::new(tokio::net::UdpSocket::from_std(socket)?));
+    }
+    Ok(vnet.bind(address).await?)
+}
+
+pub async fn listen_udp_in_port_range_with_factory(
+    vnet: &Arc<Net>,
+    port_max: u16,
+    port_min: u16,
+    laddr: SocketAddr,
+    factory: Option<&crate::udp_network::UdpSocketFactory>,
+) -> Result<Arc<dyn Conn + Send + Sync>> {
     if laddr.port() != 0 || (port_min == 0 && port_max == 0) {
-        return Ok(vnet.bind(laddr).await?);
+        return bind_with_factory(vnet, laddr, factory).await;
     }
     let i = if port_min == 0 { 1 } else { port_min };
     let j = if port_max == 0 { 0xFFFF } else { port_max };
@@ -158,7 +181,7 @@ pub async fn listen_udp_in_port_range(
     let mut port_current = port_start;
     loop {
         let laddr = SocketAddr::new(laddr.ip(), port_current);
-        match vnet.bind(laddr).await {
+        match bind_with_factory(vnet, laddr, factory).await {
             Ok(c) => return Ok(c),
             Err(err) => log::debug!("failed to listen {laddr}: {err}"),
         };

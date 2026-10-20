@@ -14,7 +14,7 @@ use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig
 use crate::candidate::*;
 use crate::error::*;
 use crate::network_type::*;
-use crate::udp_network::UDPNetwork;
+use crate::udp_network::{UDPNetwork, UdpSocketFactory};
 use crate::url::{ProtoType, SchemeType, Url};
 use crate::util::*;
 
@@ -65,6 +65,7 @@ struct GatherCandidatesSrflxMappedParasm {
     network_types: Vec<NetworkType>,
     port_max: u16,
     port_min: u16,
+    socket_factory: Option<UdpSocketFactory>,
     ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     net: Arc<Net>,
     agent_internal: Arc<AgentInternal>,
@@ -75,6 +76,7 @@ struct GatherCandidatesSrflxParams {
     network_types: Vec<NetworkType>,
     port_max: u16,
     port_min: u16,
+    socket_factory: Option<UdpSocketFactory>,
     net: Arc<Net>,
     agent_internal: Arc<AgentInternal>,
 }
@@ -125,6 +127,7 @@ impl Agent {
                         network_types: params.network_types.clone(),
                         port_max: ephemeral_config.port_max(),
                         port_min: ephemeral_config.port_min(),
+                        socket_factory: ephemeral_config.socket_factory(),
                         net: Arc::clone(&params.net),
                         agent_internal: Arc::clone(&params.agent_internal),
                     };
@@ -140,6 +143,7 @@ impl Agent {
                                 network_types: params.network_types.clone(),
                                 port_max: ephemeral_config.port_max(),
                                 port_min: ephemeral_config.port_min(),
+                                socket_factory: ephemeral_config.socket_factory(),
                                 ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
                                 net: Arc::clone(&params.net),
                                 agent_internal: Arc::clone(&params.agent_internal),
@@ -157,11 +161,21 @@ impl Agent {
                     let urls = params.urls.clone();
                     let net = Arc::clone(&params.net);
                     let agent_internal = Arc::clone(&params.agent_internal);
+                    let socket_factory = match &params.udp_network {
+                        UDPNetwork::Ephemeral(e) => e.socket_factory(),
+                        _ => None,
+                    };
                     let w = wg.worker();
                     tokio::spawn(async move {
                         let _d = w;
 
-                        Self::gather_candidates_relay(urls, net, agent_internal).await;
+                        Self::gather_candidates_relay_with_factory(
+                            urls,
+                            net,
+                            agent_internal,
+                            socket_factory,
+                        )
+                        .await;
                     });
                 }
                 _ => {}
@@ -286,11 +300,12 @@ impl Agent {
                     // accessible from the current interface.
                 case udp:*/
 
-                let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
+                let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range_with_factory(
                     &net,
                     ephemeral_config.port_max(),
                     ephemeral_config.port_min(),
                     SocketAddr::new(ip, 0),
+                    ephemeral_config.socket_factory().as_ref(),
                 )
                 .await
                 {
@@ -476,6 +491,7 @@ impl Agent {
             network_types,
             port_max,
             port_min,
+            socket_factory,
             ext_ip_mapper,
             net,
             agent_internal,
@@ -490,6 +506,7 @@ impl Agent {
 
             let network = network_type.to_string();
             let net2 = Arc::clone(&net);
+            let socket_factory = socket_factory.clone();
             let agent_internal2 = Arc::clone(&agent_internal);
             let ext_ip_mapper2 = Arc::clone(&ext_ip_mapper);
 
@@ -497,7 +514,7 @@ impl Agent {
             tokio::spawn(async move {
                 let _d = w;
 
-                let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
+                let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range_with_factory(
                     &net2,
                     port_max,
                     port_min,
@@ -506,6 +523,7 @@ impl Agent {
                     } else {
                         SocketAddr::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(), 0)
                     },
+                    socket_factory.as_ref(),
                 )
                 .await
                 {
@@ -604,6 +622,7 @@ impl Agent {
             network_types,
             port_max,
             port_min,
+            socket_factory,
             net,
             agent_internal,
         } = params;
@@ -619,6 +638,7 @@ impl Agent {
                 let is_ipv4 = network_type.is_ipv4();
                 let url = url.clone();
                 let net2 = Arc::clone(&net);
+                let socket_factory = socket_factory.clone();
                 let agent_internal2 = Arc::clone(&agent_internal);
 
                 let w = wg.worker();
@@ -639,29 +659,31 @@ impl Agent {
                         }
                     };
 
-                    let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
-                        &net2,
-                        port_max,
-                        port_min,
-                        if is_ipv4 {
-                            SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)
-                        } else {
-                            SocketAddr::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(), 0)
-                        },
-                    )
-                    .await
-                    {
-                        Ok(conn) => conn,
-                        Err(err) => {
-                            log::warn!(
-                                "[{}]: Failed to listen for {}: {}",
-                                agent_internal2.get_name(),
-                                server_addr,
-                                err
-                            );
-                            return Ok(());
-                        }
-                    };
+                    let conn: Arc<dyn Conn + Send + Sync> =
+                        match listen_udp_in_port_range_with_factory(
+                            &net2,
+                            port_max,
+                            port_min,
+                            if is_ipv4 {
+                                SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)
+                            } else {
+                                SocketAddr::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(), 0)
+                            },
+                            socket_factory.as_ref(),
+                        )
+                        .await
+                        {
+                            Ok(conn) => conn,
+                            Err(err) => {
+                                log::warn!(
+                                    "[{}]: Failed to listen for {}: {}",
+                                    agent_internal2.get_name(),
+                                    server_addr,
+                                    err
+                                );
+                                return Ok(());
+                            }
+                        };
 
                     let xoraddr =
                         match get_xormapped_addr(&conn, server_addr, STUN_GATHER_TIMEOUT).await {
@@ -735,10 +757,20 @@ impl Agent {
         wg.wait().await;
     }
 
+    #[cfg(test)]
     pub(crate) async fn gather_candidates_relay(
         urls: Vec<Url>,
         net: Arc<Net>,
         agent_internal: Arc<AgentInternal>,
+    ) {
+        Self::gather_candidates_relay_with_factory(urls, net, agent_internal, None).await;
+    }
+
+    pub(crate) async fn gather_candidates_relay_with_factory(
+        urls: Vec<Url>,
+        net: Arc<Net>,
+        agent_internal: Arc<AgentInternal>,
+        socket_factory: Option<UdpSocketFactory>,
     ) {
         let wg = WaitGroup::new();
 
@@ -765,6 +797,7 @@ impl Agent {
 
             let network = NetworkType::Udp4.to_string();
             let net2 = Arc::clone(&net);
+            let socket_factory = socket_factory.clone();
             let agent_internal2 = Arc::clone(&agent_internal);
 
             let w = wg.worker();
@@ -775,7 +808,15 @@ impl Agent {
 
                 let (loc_conn, rel_addr, rel_port) =
                     if url.proto == ProtoType::Udp && url.scheme == SchemeType::Turn {
-                        let loc_conn = match net2.bind(SocketAddr::from_str("0.0.0.0:0")?).await {
+                        let loc_conn = match listen_udp_in_port_range_with_factory(
+                            &net2,
+                            0,
+                            0,
+                            SocketAddr::from_str("0.0.0.0:0")?,
+                            socket_factory.as_ref(),
+                        )
+                        .await
+                        {
                             Ok(c) => c,
                             Err(err) => {
                                 log::warn!(
