@@ -55,3 +55,13 @@ writes and rejected packets do not count as successful checks. The counters do
 not include SDP, credentials or endpoint addresses, and do not change ICE policy.
 The agent stats regression and NestLink's real UDP peer regression check that
 all four counters advance before they are used in connection diagnostics.
+
+0.7 RC ordinary-check pacing: each candidate pair retains its own next-check
+deadline. New pairs are checked immediately; subsequent ordinary attempts are
+spaced by 500ms, 1s, then at most 2s. Extra candidate/contact wakeups cannot
+consume the retry budget before that deadline. Authenticated triggered checks,
+role/integrity checks, the retry limit and agent cancellation are unchanged.
+NestLink's real UDP regression drops both directions for four seconds: the old
+200ms retry loop exhausts every pair and times out, while the paced loop must
+connect and transfer the test payload after the temporary loss ends. This
+regression does not establish real Internet/NAT/Clash acceptance.

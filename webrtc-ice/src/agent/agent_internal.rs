@@ -382,7 +382,19 @@ impl AgentInternal {
                     continue;
                 }
 
-                if p.binding_request_count.load(Ordering::SeqCst) > self.max_binding_requests {
+                // Candidate arrivals can wake this loop repeatedly in the same
+                // millisecond. They must not consume another pair's retry
+                // budget or fail it while its response can still be in flight.
+                // Start new pairs immediately; pace subsequent ordinary checks
+                // with a bounded backoff. Authenticated triggered checks retain
+                // their immediate response path in the selector.
+                let now = Instant::now();
+                let mut next = p.next_binding_request.lock().await;
+                if next.is_some_and(|deadline| now < deadline) {
+                    continue;
+                }
+                let count = p.binding_request_count.load(Ordering::SeqCst);
+                if count > self.max_binding_requests {
                     log::trace!(
                         "[{}]: max requests reached for pair {}, marking it as failed",
                         self.get_name(),
@@ -392,6 +404,7 @@ impl AgentInternal {
                         .store(CandidatePairState::Failed as u8, Ordering::SeqCst);
                 } else {
                     p.binding_request_count.fetch_add(1, Ordering::SeqCst);
+                    *next = Some(now + Duration::from_millis(500 * (1 << count.min(2))));
                     let local = p.local.clone();
                     let remote = p.remote.clone();
                     pairs.push((local, remote));
