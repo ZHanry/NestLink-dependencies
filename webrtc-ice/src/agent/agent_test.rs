@@ -168,6 +168,13 @@ async fn test_pair_priority() -> Result<()> {
 #[tokio::test]
 async fn test_agent_get_stats() -> Result<()> {
     let (conn_a, conn_b, agent_a, agent_b) = pipe(None, None).await?;
+    for agent in [&agent_a, &agent_b] {
+        let stats = agent.get_candidate_pairs_stats().await;
+        assert!(stats.iter().any(|pair| pair.requests_sent > 0));
+        assert!(stats.iter().any(|pair| pair.requests_received > 0));
+        assert!(stats.iter().any(|pair| pair.responses_sent > 0));
+        assert!(stats.iter().any(|pair| pair.responses_received > 0));
+    }
     assert_eq!(agent_a.get_bytes_received(), 0);
     assert_eq!(agent_a.get_bytes_sent(), 0);
     assert_eq!(agent_b.get_bytes_received(), 0);

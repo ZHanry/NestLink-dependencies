@@ -212,6 +212,11 @@ impl AgentInternal {
         } else {
             ControlledSelector::handle_binding_request(self, m, local, remote).await;
         }
+        // Called only after role, username and integrity validation. The
+        // selector may create the pair for a peer-reflexive request.
+        if let Some(pair) = self.find_pair(local, remote).await {
+            pair.requests_received.fetch_add(1, Ordering::Relaxed);
+        }
     }
 }
 
@@ -324,6 +329,7 @@ impl ControllingSelector for AgentInternal {
             let selected_pair_is_none = self.agent_conn.get_selected_pair().is_none();
 
             if let Some(p) = self.find_pair(local, remote).await {
+                p.responses_received.fetch_add(1, Ordering::Relaxed);
                 p.state
                     .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
                 log::trace!(
@@ -474,6 +480,7 @@ impl ControlledSelector for AgentInternal {
             log::trace!("inbound STUN (SuccessResponse) from {remote} to {local}");
 
             if let Some(p) = self.find_pair(local, remote).await {
+                p.responses_received.fetch_add(1, Ordering::Relaxed);
                 p.state
                     .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
                 log::trace!("Found valid candidate pair: {p}");

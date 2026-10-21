@@ -47,3 +47,11 @@ infer VPN bypass from interface names. NestLink's `media_socket_factory`
 integration test performs a real local STUN exchange and subsequent UDP
 check/data exchanges through the same factory-created socket and source port.
 This test does not qualify an Internet peer path or TURN TCP/TLS routing.
+
+0.7 RC connectivity diagnostics: the candidate pair's four STUN check counters
+are populated from successful socket writes and authenticated requests/responses.
+Responses must also match an outstanding transaction and its destination. Failed
+writes and rejected packets do not count as successful checks. The counters do
+not include SDP, credentials or endpoint addresses, and do not change ICE policy.
+The agent stats regression and NestLink's real UDP peer regression check that
+all four counters advance before they are used in connection diagnostics.

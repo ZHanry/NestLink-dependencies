@@ -21,7 +21,7 @@ use std::time::SystemTime;
 
 use async_trait::async_trait;
 use candidate_base::*;
-use portable_atomic::{AtomicBool, AtomicU16, AtomicU8};
+use portable_atomic::{AtomicBool, AtomicU16, AtomicU64, AtomicU8};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, Mutex};
 
@@ -232,6 +232,10 @@ pub struct CandidatePair {
     pub remote: Arc<dyn Candidate + Send + Sync>,
     pub local: Arc<dyn Candidate + Send + Sync>,
     pub(crate) binding_request_count: AtomicU16,
+    pub(crate) requests_sent: AtomicU64,
+    pub(crate) requests_received: AtomicU64,
+    pub(crate) responses_sent: AtomicU64,
+    pub(crate) responses_received: AtomicU64,
     pub(crate) state: AtomicU8, // convert it to CandidatePairState,
     pub(crate) nominated: AtomicBool,
     pub(crate) nominate_on_binding_success: AtomicBool,
@@ -245,6 +249,10 @@ impl Default for CandidatePair {
             local: Arc::new(CandidateBase::default()),
             state: AtomicU8::new(CandidatePairState::Waiting as u8),
             binding_request_count: AtomicU16::new(0),
+            requests_sent: AtomicU64::new(0),
+            requests_received: AtomicU64::new(0),
+            responses_sent: AtomicU64::new(0),
+            responses_received: AtomicU64::new(0),
             nominated: AtomicBool::new(false),
             nominate_on_binding_success: AtomicBool::new(false),
         }
@@ -298,6 +306,10 @@ impl CandidatePair {
             local,
             state: AtomicU8::new(CandidatePairState::Waiting as u8),
             binding_request_count: AtomicU16::new(0),
+            requests_sent: AtomicU64::new(0),
+            requests_received: AtomicU64::new(0),
+            responses_sent: AtomicU64::new(0),
+            responses_received: AtomicU64::new(0),
             nominated: AtomicBool::new(false),
             nominate_on_binding_success: AtomicBool::new(false),
         }

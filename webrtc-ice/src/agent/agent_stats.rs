@@ -224,6 +224,10 @@ impl AgentInternal {
                 remote_candidate_id: cp.remote.id(),
                 state: cp.state.load(Ordering::SeqCst).into(),
                 nominated: cp.nominated.load(Ordering::SeqCst),
+                requests_sent: cp.requests_sent.load(Ordering::Relaxed),
+                requests_received: cp.requests_received.load(Ordering::Relaxed),
+                responses_sent: cp.responses_sent.load(Ordering::Relaxed),
+                responses_received: cp.responses_received.load(Ordering::Relaxed),
                 ..CandidatePairStats::default()
             };
             res.push(stat);

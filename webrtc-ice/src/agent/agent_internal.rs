@@ -1011,12 +1011,22 @@ impl AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        if let Err(err) = local.write_to(&msg.raw, &**remote).await {
-            log::trace!(
+        match local.write_to(&msg.raw, &**remote).await {
+            Ok(_) if msg.typ.method == METHOD_BINDING => {
+                if let Some(pair) = self.find_pair(local, remote).await {
+                    if msg.typ.class == CLASS_REQUEST {
+                        pair.requests_sent.fetch_add(1, Ordering::Relaxed);
+                    } else if msg.typ.class == CLASS_SUCCESS_RESPONSE {
+                        pair.responses_sent.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            }
+            Ok(_) => {}
+            Err(err) => log::trace!(
                 "[{}]: failed to send STUN message: {}",
                 self.get_name(),
                 err
-            );
+            ),
         }
     }
 
