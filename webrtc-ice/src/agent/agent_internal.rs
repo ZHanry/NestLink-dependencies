@@ -7,7 +7,10 @@ use super::agent_transport::*;
 use super::*;
 use crate::candidate::candidate_base::CandidateBaseConfig;
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
-use crate::udp_network::{ConnectivityEvent, ConnectivityObserver, UDPNetwork};
+use crate::udp_network::{
+    socket_error, ConnectivityEvent, ConnectivityObserver, SocketObservation, SocketStage,
+    UDPNetwork,
+};
 use crate::util::*;
 
 pub type ChanCandidateTx =
@@ -83,6 +86,31 @@ pub struct AgentInternal {
     pub(crate) keepalive_interval: Duration,
     // How often should we run our internal taskLoop to check for state changes when connecting
     pub(crate) check_interval: Duration,
+}
+
+struct ReceiverGuard {
+    observer: Option<ConnectivityObserver>,
+    kind: CandidateType,
+    observation: SocketObservation,
+    completed: bool,
+}
+
+impl ReceiverGuard {
+    fn complete(&mut self) {
+        self.completed = true;
+    }
+}
+
+impl Drop for ReceiverGuard {
+    fn drop(&mut self) {
+        if !self.completed {
+            if let Some(observer) = &self.observer {
+                let mut observation = self.observation;
+                observation.stage = SocketStage::ReceiverAborted;
+                observer(self.kind, ConnectivityEvent::Socket(observation));
+            }
+        }
+    }
 }
 
 impl AgentInternal {
@@ -585,6 +613,7 @@ impl AgentInternal {
             if let Some(cands) = local_candidates.get(&network_type) {
                 for cand in cands {
                     if cand.equal(&**c) {
+                        self.observe_socket(&**c, SocketStage::DuplicateCandidate, None);
                         if let Err(err) = c.close().await {
                             log::warn!(
                                 "[{}]: Failed to close duplicate candidate: {}",
@@ -1054,7 +1083,16 @@ impl AgentInternal {
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
         match local.write_to(&msg.raw, &**remote).await {
-            Ok(_) if msg.typ.method == METHOD_BINDING => {
+            Ok(length) if msg.typ.method == METHOD_BINDING => {
+                self.observe_socket(
+                    &**local,
+                    if length == msg.raw.len() {
+                        SocketStage::SendAccepted
+                    } else {
+                        SocketStage::SendShort
+                    },
+                    None,
+                );
                 if let Some(pair) = self.find_pair(local, remote).await {
                     if msg.typ.class == CLASS_REQUEST {
                         pair.requests_sent.fetch_add(1, Ordering::Relaxed);
@@ -1065,6 +1103,7 @@ impl AgentInternal {
             }
             Ok(_) => {}
             Err(err) => {
+                self.observe_socket(&**local, SocketStage::SendError, Some(&err));
                 self.observe(local.candidate_type(), ConnectivityEvent::SendError);
                 log::trace!(
                     "[{}]: failed to send STUN message: {}",
@@ -1081,6 +1120,7 @@ impl AgentInternal {
         candidate: &Arc<dyn Candidate + Send + Sync>,
         initialized_ch: Option<broadcast::Receiver<()>>,
     ) {
+        self.observe_socket(&**candidate, SocketStage::CandidateStarted, None);
         let (closed_ch_tx, closed_ch_rx) = broadcast::channel(1);
         {
             let closed_ch = candidate.get_closed_ch();
@@ -1093,12 +1133,25 @@ impl AgentInternal {
             let conn = Arc::clone(conn);
             let addr = candidate.addr();
             let ai = Arc::clone(self);
+            let mut guard = ReceiverGuard {
+                observer: self.connectivity_observer.clone(),
+                kind: candidate.candidate_type(),
+                observation: self.socket_observation(
+                    &**candidate,
+                    SocketStage::ReceiverAborted,
+                    None,
+                ),
+                completed: false,
+            };
+            self.observe_socket(&**candidate, SocketStage::ReceiverSpawned, None);
             tokio::spawn(async move {
                 let _ = ai
                     .recv_loop(cand, closed_ch_rx, initialized_ch, conn, addr)
                     .await;
+                guard.complete();
             });
         } else {
+            self.observe_socket(&**candidate, SocketStage::MissingConnection, None);
             log::error!("[{}]: Can't start due to conn is_none", self.get_name(),);
         }
     }
@@ -1174,11 +1227,23 @@ impl AgentInternal {
         addr: SocketAddr,
     ) -> Result<()> {
         if let Some(mut initialized_ch) = initialized_ch {
+            self.observe_socket(&*candidate, SocketStage::WaitingForStart, None);
             tokio::select! {
-                _ = initialized_ch.recv() => {}
-                _ = closed_ch_rx.recv() => return Err(Error::ErrClosed),
+                result = initialized_ch.recv() => {
+                    match result {
+                        Err(broadcast::error::RecvError::Closed) => self.observe_socket(&*candidate, SocketStage::StartSignalClosed, None),
+                        Err(broadcast::error::RecvError::Lagged(_)) => self.observe_socket(&*candidate, SocketStage::StartSignalLagged, None),
+                        Ok(()) => {}
+                    }
+                }
+                _ = closed_ch_rx.recv() => {
+                    self.observe_socket(&*candidate, SocketStage::ReceiverClosedBeforeStart, None);
+                    return Err(Error::ErrClosed);
+                },
             }
         }
+
+        self.observe_socket(&*candidate, SocketStage::ReceiverReady, None);
 
         let mut buffer = vec![0_u8; RECEIVE_MTU];
         let mut n;
@@ -1192,14 +1257,19 @@ impl AgentInternal {
                             src_addr = src;
                        }
                        Err(err) => {
+                           self.observe_socket(&*candidate, SocketStage::ReceiveError, Some(&err));
                            self.observe(candidate.candidate_type(), ConnectivityEvent::ReceiveError);
                            return Err(Error::Other(err.to_string()));
                        },
                    }
                },
-                _  = closed_ch_rx.recv() => return Err(Error::ErrClosed),
+                _  = closed_ch_rx.recv() => {
+                    self.observe_socket(&*candidate, SocketStage::ReceiverClosed, None);
+                    return Err(Error::ErrClosed);
+                },
             }
 
+            self.observe_socket(&*candidate, SocketStage::DatagramReceived, None);
             self.handle_inbound_candidate_msg(&candidate, &buffer[..n], src_addr, addr)
                 .await;
         }
@@ -1251,6 +1321,42 @@ impl AgentInternal {
         }
     }
 
+    fn socket_observation(
+        &self,
+        candidate: &(dyn Candidate + Send + Sync),
+        stage: SocketStage,
+        error: Option<&(dyn std::error::Error + 'static)>,
+    ) -> SocketObservation {
+        use std::hash::{Hash, Hasher};
+        let mut key = std::collections::hash_map::DefaultHasher::new();
+        candidate.id().hash(&mut key);
+        let port = candidate
+            .get_conn()
+            .and_then(|conn| conn.local_addr().ok())
+            .map_or(candidate.port(), |addr| addr.port());
+        SocketObservation {
+            candidate_key: key.finish(),
+            port,
+            ipv6: candidate.addr().is_ipv6(),
+            stage,
+            error: error.map(socket_error),
+        }
+    }
+
+    fn observe_socket(
+        &self,
+        candidate: &(dyn Candidate + Send + Sync),
+        stage: SocketStage,
+        error: Option<&(dyn std::error::Error + 'static)>,
+    ) {
+        if let Some(observer) = &self.connectivity_observer {
+            observer(
+                candidate.candidate_type(),
+                ConnectivityEvent::Socket(self.socket_observation(candidate, stage, error)),
+            );
+        }
+    }
+
     pub(crate) fn get_name(&self) -> &str {
         if self.is_controlling.load(Ordering::SeqCst) {
             "controlling"
@@ -1265,6 +1371,114 @@ mod nestlink_resolved_remote_candidate_tests {
     use super::*;
     use crate::candidate::candidate_host::CandidateHostConfig;
     use std::net::{IpAddr, Ipv6Addr, SocketAddrV6};
+
+    #[tokio::test]
+    async fn receiver_error_exits_with_typed_cause_and_without_false_abort() -> Result<()> {
+        let events = Arc::new(SyncMutex::new(Vec::new()));
+        let observed = events.clone();
+        let mut network = crate::udp_network::EphemeralUDP::default();
+        network.set_connectivity_observer(Arc::new(move |_, event| observed.lock().push(event)));
+        let (agent, _receivers) = AgentInternal::new(&AgentConfig {
+            udp_network: UDPNetwork::Ephemeral(network),
+            ..Default::default()
+        });
+        let agent = Arc::new(agent);
+        let (socket, peer) = util::conn::conn_pipe::pipe();
+        let candidate: Arc<dyn Candidate + Send + Sync> = Arc::new(
+            CandidateHostConfig {
+                base_config: CandidateBaseConfig {
+                    network: "udp".into(),
+                    address: "127.0.0.1".into(),
+                    port: 1234,
+                    component: 1,
+                    conn: Some(Arc::new(socket)),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+            .new_candidate_host()?,
+        );
+        agent.start_candidate(&candidate, None).await;
+        // Dropping the other endpoint causes a real Conn::recv_from I/O error.
+        drop(peer);
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if events.lock().contains(&ConnectivityEvent::ReceiveError) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .map_err(|_| Error::ErrRead)?;
+        let events = events.lock();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            ConnectivityEvent::Socket(SocketObservation {
+                stage: SocketStage::ReceiveError,
+                error: Some(crate::udp_network::SocketError {
+                    layer: crate::udp_network::SocketErrorLayer::Io,
+                    ..
+                }),
+                ..
+            })
+        )));
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            ConnectivityEvent::Socket(SocketObservation {
+                stage: SocketStage::ReceiverAborted,
+                ..
+            })
+        )));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn receiver_guard_distinguishes_task_abort_from_normal_completion() -> Result<()> {
+        let events = Arc::new(SyncMutex::new(Vec::new()));
+        let observed = events.clone();
+        let observer: ConnectivityObserver = Arc::new(move |_, event| observed.lock().push(event));
+        for completed in [false, true] {
+            let mut guard = ReceiverGuard {
+                observer: Some(observer.clone()),
+                kind: CandidateType::Host,
+                observation: SocketObservation {
+                    candidate_key: 1,
+                    port: 1234,
+                    ipv6: false,
+                    stage: SocketStage::ReceiverAborted,
+                    error: None,
+                },
+                completed: false,
+            };
+            let (ready, started) = tokio::sync::oneshot::channel();
+            let task = tokio::spawn(async move {
+                if completed {
+                    guard.complete();
+                }
+                let _ = ready.send(());
+                if !completed {
+                    std::future::pending::<()>().await;
+                }
+            });
+            started.await.map_err(|_| Error::ErrClosed)?;
+            task.abort();
+            let _ = task.await;
+        }
+        assert_eq!(
+            events.lock().len(),
+            1,
+            "only the aborted task emits an exit"
+        );
+        assert!(matches!(
+            events.lock()[0],
+            ConnectivityEvent::Socket(SocketObservation {
+                stage: SocketStage::ReceiverAborted,
+                ..
+            })
+        ));
+        Ok(())
+    }
 
     #[tokio::test]
     async fn ingress_observer_distinguishes_udp_receipt_from_ice_authentication_rejection(

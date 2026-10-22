@@ -65,3 +65,15 @@ NestLink's real UDP regression drops both directions for four seconds: the old
 200ms retry loop exhausts every pair and times out, while the paced loop must
 connect and transfer the test payload after the temporary loss ends. This
 regression does not establish real Internet/NAT/Clash acceptance.
+
+0.7 RC socket lifecycle diagnostics: the optional connectivity observer also
+reports local candidate receiver creation, initialization wait, initialization
+channel closure/lag, readiness, close-before-start, close, task abort and typed
+receive/send errors. Candidate keys are opaque local hashes; only port and
+address family are retained. Whole accepted writes and short writes are distinct
+diagnostic events; no ICE retry, authentication, initialization or shutdown
+behavior is changed. Typed error causes preserve available OS codes without
+exporting error text. Already-flattened upstream errors remain unknown. Regression
+tests exercise real receiver I/O failure, normal completion versus Tokio task
+abort, and nested typed errors; NestLink's actual UDP/ICE tests cover readiness,
+authentication rejection, accepted writes and closing before connection.

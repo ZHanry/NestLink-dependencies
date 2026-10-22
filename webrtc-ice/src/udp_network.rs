@@ -7,6 +7,7 @@ use crate::candidate::CandidateType;
 /// Fixed labels only. Observers never receive packets, addresses or ICE secrets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConnectivityEvent {
+    Socket(SocketObservation),
     DatagramReceived,
     ReceiveError,
     StunDecodeRejected,
@@ -17,6 +18,184 @@ pub enum ConnectivityEvent {
     IntegrityRejected,
     UnknownRemoteResponse,
     SendError,
+}
+
+/// Per-candidate lifecycle evidence. Ports and a local opaque key are enough
+/// to correlate the OS socket table; no address or credential is exposed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SocketObservation {
+    pub candidate_key: u64,
+    pub port: u16,
+    pub ipv6: bool,
+    pub stage: SocketStage,
+    pub error: Option<SocketError>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SocketStage {
+    CandidateStarted,
+    MissingConnection,
+    DuplicateCandidate,
+    ReceiverSpawned,
+    WaitingForStart,
+    StartSignalClosed,
+    StartSignalLagged,
+    ReceiverReady,
+    ReceiverClosedBeforeStart,
+    ReceiverClosed,
+    ReceiverAborted,
+    ReceiveError,
+    DatagramReceived,
+    SendAccepted,
+    SendShort,
+    SendError,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SocketError {
+    pub layer: SocketErrorLayer,
+    pub code: SocketErrorCode,
+    pub os_code: Option<i32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SocketErrorLayer {
+    Io,
+    Turn,
+    Wrapped,
+    Other,
+    Protocol,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SocketErrorCode {
+    Io,
+    Timeout,
+    Closed,
+    NoPermission,
+    NoAllocation,
+    ChannelBinding,
+    ShortWrite,
+    PeerFamilyMismatch,
+    Protocol,
+    Other,
+}
+
+/// Inspect typed causes only; error messages can contain network secrets.
+pub(crate) fn socket_error(mut error: &(dyn std::error::Error + 'static)) -> SocketError {
+    for _ in 0..8 {
+        if let Some(error) = error.downcast_ref::<std::io::Error>() {
+            return SocketError {
+                layer: SocketErrorLayer::Io,
+                code: SocketErrorCode::Io,
+                os_code: error.raw_os_error(),
+            };
+        }
+        if let Some(ice) = error.downcast_ref::<Error>() {
+            match ice {
+                Error::Io(inner) => {
+                    error = &inner.0;
+                    continue;
+                }
+                Error::Util(inner) => {
+                    error = inner;
+                    continue;
+                }
+                Error::Turn(inner) => {
+                    error = inner;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        if let Some(util) = error.downcast_ref::<util::Error>() {
+            match util {
+                util::Error::Io(inner) => {
+                    error = &inner.0;
+                    continue;
+                }
+                util::Error::Std(inner) => {
+                    error = inner.0.as_ref();
+                    continue;
+                }
+                util::Error::ErrTimeout => {
+                    return SocketError {
+                        layer: SocketErrorLayer::Protocol,
+                        code: SocketErrorCode::Timeout,
+                        os_code: None,
+                    }
+                }
+                util::Error::ErrAlreadyClosed
+                | util::Error::ErrUseClosedNetworkConn
+                | util::Error::ErrClosedListener
+                | util::Error::ErrBufferClosed => {
+                    return SocketError {
+                        layer: SocketErrorLayer::Protocol,
+                        code: SocketErrorCode::Closed,
+                        os_code: None,
+                    }
+                }
+                util::Error::Other(_) => {
+                    return SocketError {
+                        layer: SocketErrorLayer::Other,
+                        code: SocketErrorCode::Other,
+                        os_code: None,
+                    }
+                }
+                _ => {}
+            }
+        }
+        if let Some(turn) = error.downcast_ref::<turn::Error>() {
+            let code = match turn {
+                turn::Error::Io(inner) => {
+                    error = &inner.0;
+                    continue;
+                }
+                turn::Error::Util(inner) => {
+                    error = inner;
+                    continue;
+                }
+                turn::Error::ErrNoPermission => SocketErrorCode::NoPermission,
+                turn::Error::ErrNoAllocationFound => SocketErrorCode::NoAllocation,
+                turn::Error::ErrChannelBindNotFound | turn::Error::ErrNoSuchChannelBind => {
+                    SocketErrorCode::ChannelBinding
+                }
+                turn::Error::ErrAllRetransmissionsFailed | turn::Error::ErrMaxRetriesExceeded => {
+                    SocketErrorCode::Timeout
+                }
+                turn::Error::ErrClosed
+                | turn::Error::ErrAlreadyClosed
+                | turn::Error::ErrTransactionClosed => SocketErrorCode::Closed,
+                turn::Error::ErrShortWrite => SocketErrorCode::ShortWrite,
+                turn::Error::ErrPeerAddressFamilyMismatch => SocketErrorCode::PeerFamilyMismatch,
+                turn::Error::Other(_) => SocketErrorCode::Other,
+                _ => SocketErrorCode::Protocol,
+            };
+            return SocketError {
+                layer: SocketErrorLayer::Turn,
+                code,
+                os_code: None,
+            };
+        }
+        match error.source() {
+            Some(source) => error = source,
+            None => {
+                return SocketError {
+                    layer: SocketErrorLayer::Protocol,
+                    code: SocketErrorCode::Protocol,
+                    os_code: None,
+                }
+            }
+        }
+    }
+    SocketError {
+        layer: SocketErrorLayer::Wrapped,
+        code: SocketErrorCode::Other,
+        os_code: None,
+    }
 }
 
 pub type ConnectivityObserver = Arc<dyn Fn(CandidateType, ConnectivityEvent) + Send + Sync>;
@@ -112,6 +291,27 @@ impl UDPNetwork {
 #[cfg(test)]
 mod test {
     use super::EphemeralUDP;
+
+    #[test]
+    fn typed_causes_preserve_os_codes_and_turn_failure_without_messages(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use super::{socket_error, SocketErrorCode, SocketErrorLayer};
+        let turn_error: turn::Error = std::io::Error::from_raw_os_error(10054).into();
+        let error = crate::Error::Util(util::Error::from_std(turn_error));
+        let observation = socket_error(&error);
+        assert_eq!(observation.layer, SocketErrorLayer::Io);
+        assert_eq!(observation.os_code, Some(10054));
+        let error = util::Error::from_std(turn::Error::ErrNoPermission);
+        let observation = socket_error(&error);
+        assert_eq!(observation.layer, SocketErrorLayer::Turn);
+        assert_eq!(observation.code, SocketErrorCode::NoPermission);
+        let secret = "TEST_PASSWORD_MUST_NOT_LEAK";
+        let serialized = serde_json::to_string(&socket_error(&util::Error::from_std(
+            turn::Error::Other(secret.into()),
+        )))?;
+        assert!(!serialized.contains(secret));
+        Ok(())
+    }
 
     #[test]
     fn test_ephemeral_udp_constructor() {
