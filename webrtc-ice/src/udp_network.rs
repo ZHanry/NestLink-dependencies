@@ -2,6 +2,24 @@ use std::sync::Arc;
 
 use super::udp_mux::UDPMux;
 use super::Error;
+use crate::candidate::CandidateType;
+
+/// Fixed labels only. Observers never receive packets, addresses or ICE secrets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConnectivityEvent {
+    DatagramReceived,
+    ReceiveError,
+    StunDecodeRejected,
+    BindingRequestReceived,
+    BindingResponseReceived,
+    RoleRejected,
+    UsernameRejected,
+    IntegrityRejected,
+    UnknownRemoteResponse,
+    SendError,
+}
+
+pub type ConnectivityObserver = Arc<dyn Fn(CandidateType, ConnectivityEvent) + Send + Sync>;
 
 /// Application-owned socket creation for real interface routing. The returned
 /// socket is retained by its ICE candidate for STUN, checks and media traffic.
@@ -13,9 +31,16 @@ pub struct EphemeralUDP {
     port_min: u16,
     port_max: u16,
     socket_factory: Option<UdpSocketFactory>,
+    connectivity_observer: Option<ConnectivityObserver>,
 }
 
 impl EphemeralUDP {
+    pub fn set_connectivity_observer(&mut self, observer: ConnectivityObserver) {
+        self.connectivity_observer = Some(observer);
+    }
+    pub fn connectivity_observer(&self) -> Option<ConnectivityObserver> {
+        self.connectivity_observer.clone()
+    }
     pub fn set_socket_factory(&mut self, factory: UdpSocketFactory) {
         self.socket_factory = Some(factory);
     }

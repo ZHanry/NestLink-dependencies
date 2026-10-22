@@ -7,6 +7,7 @@ use super::agent_transport::*;
 use super::*;
 use crate::candidate::candidate_base::CandidateBaseConfig;
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
+use crate::udp_network::{ConnectivityEvent, ConnectivityObserver, UDPNetwork};
 use crate::util::*;
 
 pub type ChanCandidateTx =
@@ -21,6 +22,7 @@ pub(crate) struct UfragPwd {
 }
 
 pub struct AgentInternal {
+    connectivity_observer: Option<ConnectivityObserver>,
     // State owned by the taskLoop
     pub(crate) on_connected_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) on_connected_rx: Mutex<Option<mpsc::Receiver<()>>>,
@@ -112,6 +114,10 @@ impl AgentInternal {
             on_selected_candidate_pair_change_hdlr: ArcSwapOption::empty(),
             on_candidate_hdlr: ArcSwapOption::empty(),
 
+            connectivity_observer: match &config.udp_network {
+                UDPNetwork::Ephemeral(network) => network.connectivity_observer(),
+                UDPNetwork::Muxed(_) => None,
+            },
             tie_breaker: AtomicU64::new(rand::random::<u64>()),
             is_controlling: AtomicBool::new(config.is_controlling),
             lite: AtomicBool::new(config.lite),
@@ -838,6 +844,19 @@ impl AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: SocketAddr,
     ) {
+        if m.typ.method == METHOD_BINDING {
+            if m.typ.class == CLASS_REQUEST {
+                self.observe(
+                    local.candidate_type(),
+                    ConnectivityEvent::BindingRequestReceived,
+                );
+            } else if m.typ.class == CLASS_SUCCESS_RESPONSE {
+                self.observe(
+                    local.candidate_type(),
+                    ConnectivityEvent::BindingResponseReceived,
+                );
+            }
+        }
         if m.typ.method != METHOD_BINDING
             || !(m.typ.class == CLASS_SUCCESS_RESPONSE
                 || m.typ.class == CLASS_REQUEST
@@ -856,12 +875,14 @@ impl AgentInternal {
 
         if self.is_controlling.load(Ordering::SeqCst) {
             if m.contains(ATTR_ICE_CONTROLLING) {
+                self.observe(local.candidate_type(), ConnectivityEvent::RoleRejected);
                 log::debug!(
                     "[{}]: inbound isControlling && a.isControlling == true",
                     self.get_name(),
                 );
                 return;
             } else if m.contains(ATTR_USE_CANDIDATE) {
+                self.observe(local.candidate_type(), ConnectivityEvent::RoleRejected);
                 log::debug!(
                     "[{}]: useCandidate && a.isControlling == true",
                     self.get_name(),
@@ -869,6 +890,7 @@ impl AgentInternal {
                 return;
             }
         } else if m.contains(ATTR_ICE_CONTROLLED) {
+            self.observe(local.candidate_type(), ConnectivityEvent::RoleRejected);
             log::debug!(
                 "[{}]: inbound isControlled && a.isControlling == false",
                 self.get_name(),
@@ -885,6 +907,7 @@ impl AgentInternal {
                 if let Err(err) =
                     assert_inbound_message_integrity(m, ufrag_pwd.remote_pwd.as_bytes())
                 {
+                    self.observe(local.candidate_type(), ConnectivityEvent::IntegrityRejected);
                     log::warn!(
                         "[{}]: discard message from ({}), {}",
                         self.get_name(),
@@ -898,6 +921,10 @@ impl AgentInternal {
             if let Some(rc) = &remote_candidate {
                 self.handle_success_response(m, local, rc, remote).await;
             } else {
+                self.observe(
+                    local.candidate_type(),
+                    ConnectivityEvent::UnknownRemoteResponse,
+                );
                 log::warn!(
                     "[{}]: discard success message from ({}), no such remote",
                     self.get_name(),
@@ -911,6 +938,7 @@ impl AgentInternal {
                 let username =
                     ufrag_pwd.local_ufrag.clone() + ":" + ufrag_pwd.remote_ufrag.as_str();
                 if let Err(err) = assert_inbound_username(m, &username) {
+                    self.observe(local.candidate_type(), ConnectivityEvent::UsernameRejected);
                     log::warn!(
                         "[{}]: discard message from ({}), {}",
                         self.get_name(),
@@ -921,6 +949,7 @@ impl AgentInternal {
                 } else if let Err(err) =
                     assert_inbound_message_integrity(m, ufrag_pwd.local_pwd.as_bytes())
                 {
+                    self.observe(local.candidate_type(), ConnectivityEvent::IntegrityRejected);
                     log::warn!(
                         "[{}]: discard message from ({}), {}",
                         self.get_name(),
@@ -1035,11 +1064,14 @@ impl AgentInternal {
                 }
             }
             Ok(_) => {}
-            Err(err) => log::trace!(
-                "[{}]: failed to send STUN message: {}",
-                self.get_name(),
-                err
-            ),
+            Err(err) => {
+                self.observe(local.candidate_type(), ConnectivityEvent::SendError);
+                log::trace!(
+                    "[{}]: failed to send STUN message: {}",
+                    self.get_name(),
+                    err
+                );
+            }
         }
     }
 
@@ -1159,7 +1191,10 @@ impl AgentInternal {
                             n = num;
                             src_addr = src;
                        }
-                       Err(err) => return Err(Error::Other(err.to_string())),
+                       Err(err) => {
+                           self.observe(candidate.candidate_type(), ConnectivityEvent::ReceiveError);
+                           return Err(Error::Other(err.to_string()));
+                       },
                    }
                },
                 _  = closed_ch_rx.recv() => return Err(Error::ErrClosed),
@@ -1177,6 +1212,7 @@ impl AgentInternal {
         src_addr: SocketAddr,
         addr: SocketAddr,
     ) {
+        self.observe(c.candidate_type(), ConnectivityEvent::DatagramReceived);
         if stun::message::is_message(buf) {
             let mut m = Message {
                 raw: vec![],
@@ -1186,6 +1222,7 @@ impl AgentInternal {
             m.raw.extend_from_slice(buf);
 
             if let Err(err) = m.decode() {
+                self.observe(c.candidate_type(), ConnectivityEvent::StunDecodeRejected);
                 log::warn!(
                     "[{}]: Failed to handle decode ICE from {} to {}: {}",
                     self.get_name(),
@@ -1208,6 +1245,12 @@ impl AgentInternal {
         }
     }
 
+    fn observe(&self, kind: CandidateType, event: ConnectivityEvent) {
+        if let Some(observer) = &self.connectivity_observer {
+            observer(kind, event);
+        }
+    }
+
     pub(crate) fn get_name(&self) -> &str {
         if self.is_controlling.load(Ordering::SeqCst) {
             "controlling"
@@ -1222,6 +1265,90 @@ mod nestlink_resolved_remote_candidate_tests {
     use super::*;
     use crate::candidate::candidate_host::CandidateHostConfig;
     use std::net::{IpAddr, Ipv6Addr, SocketAddrV6};
+
+    #[tokio::test]
+    async fn ingress_observer_distinguishes_udp_receipt_from_ice_authentication_rejection(
+    ) -> Result<()> {
+        use crate::udp_network::EphemeralUDP;
+        use stun::textattrs::Username;
+        let events = Arc::new(SyncMutex::new(Vec::new()));
+        let observed = events.clone();
+        let mut network = EphemeralUDP::default();
+        network.set_connectivity_observer(Arc::new(move |kind, event| {
+            observed.lock().push((kind, event));
+        }));
+        let (agent, _receivers) = AgentInternal::new(&AgentConfig {
+            udp_network: UDPNetwork::Ephemeral(network),
+            ..Default::default()
+        });
+        let agent = Arc::new(agent);
+        *agent.ufrag_pwd.lock().await = UfragPwd {
+            local_ufrag: "host".into(),
+            local_pwd: "host-test-password".into(),
+            remote_ufrag: "browser".into(),
+            remote_pwd: "browser-test-password".into(),
+        };
+        let socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await?;
+        let local = socket.local_addr()?;
+        let candidate: Arc<dyn Candidate + Send + Sync> = Arc::new(
+            CandidateHostConfig {
+                base_config: CandidateBaseConfig {
+                    network: "udp".into(),
+                    address: local.ip().to_string(),
+                    port: local.port(),
+                    component: 1,
+                    conn: Some(Arc::new(socket)),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+            .new_candidate_host()?,
+        );
+        agent.start_candidate(&candidate, None).await;
+        let sender = tokio::net::UdpSocket::bind("127.0.0.1:0").await?;
+        for (username, password) in [
+            ("wrong:browser", "host-test-password"),
+            ("host:browser", "wrong-password"),
+        ] {
+            let mut message = Message::new();
+            message.build(&[
+                Box::new(TransactionId::new()),
+                Box::new(BINDING_REQUEST),
+                Box::new(Username::new(ATTR_USERNAME, username.into())),
+                Box::new(MessageIntegrity::new_short_term_integrity(password.into())),
+                Box::new(FINGERPRINT),
+            ])?;
+            sender.send_to(&message.raw, local).await?;
+        }
+        let received = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if events
+                    .lock()
+                    .iter()
+                    .any(|(_, e)| *e == ConnectivityEvent::IntegrityRejected)
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+        candidate.close().await?;
+        assert!(received.is_ok());
+        assert!(agent.remote_candidates.lock().await.is_empty());
+        let events = events.lock();
+        let count = |event| {
+            events
+                .iter()
+                .filter(|(kind, actual)| *kind == CandidateType::Host && *actual == event)
+                .count()
+        };
+        assert_eq!(count(ConnectivityEvent::DatagramReceived), 2);
+        assert_eq!(count(ConnectivityEvent::BindingRequestReceived), 2);
+        assert_eq!(count(ConnectivityEvent::UsernameRejected), 1);
+        assert_eq!(count(ConnectivityEvent::IntegrityRejected), 1);
+        Ok(())
+    }
 
     fn host_candidate(
         network: &str,
