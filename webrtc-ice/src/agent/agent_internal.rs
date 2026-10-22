@@ -4,6 +4,7 @@ use arc_swap::ArcSwapOption;
 use util::sync::Mutex as SyncMutex;
 
 use super::agent_transport::*;
+use super::port_discovery::PortDiscovery;
 use super::*;
 use crate::candidate::candidate_base::CandidateBaseConfig;
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
@@ -25,6 +26,7 @@ pub(crate) struct UfragPwd {
 }
 
 pub struct AgentInternal {
+    pub(super) port_discovery: Mutex<PortDiscovery>,
     connectivity_observer: Option<ConnectivityObserver>,
     // State owned by the taskLoop
     pub(crate) on_connected_tx: Mutex<Option<mpsc::Sender<()>>>,
@@ -124,6 +126,10 @@ impl AgentInternal {
         let (started_ch_tx, _) = broadcast::channel(1);
 
         let ai = AgentInternal {
+            port_discovery: Mutex::new(PortDiscovery::new(match &config.udp_network {
+                UDPNetwork::Ephemeral(network) => network.bounded_port_discovery(),
+                UDPNetwork::Muxed(_) => false,
+            })),
             on_connected_tx: Mutex::new(Some(on_connected_tx)),
             on_connected_rx: Mutex::new(Some(on_connected_rx)),
 
@@ -265,6 +271,7 @@ impl AgentInternal {
         }
 
         self.contact_candidates().await;
+        self.probe_remote_ports().await;
 
         *last_connection_state = self.connection_state.load(Ordering::SeqCst).into();
     }
@@ -698,6 +705,7 @@ impl AgentInternal {
     ///
     /// This is used for restarts, failures and on close.
     pub(crate) async fn delete_all_candidates(&self) {
+        self.port_discovery.lock().await.stop();
         {
             let mut local_candidates = self.local_candidates.lock().await;
             for cs in local_candidates.values_mut() {
@@ -947,6 +955,13 @@ impl AgentInternal {
                 }
             }
 
+            // Integrity was checked above. A guessed endpoint becomes a real
+            // prflx candidate only after a live transaction, local socket and
+            // exact response source all match. Normal checks and nomination
+            // are still required; the discovery response cannot select a pair.
+            if self.accept_port_discovery_response(m, local, remote).await {
+                return;
+            }
             if let Some(rc) = &remote_candidate {
                 self.handle_success_response(m, local, rc, remote).await;
             } else {
@@ -1071,8 +1086,12 @@ impl AgentInternal {
         }
 
         let mut ufrag_pwd = self.ufrag_pwd.lock().await;
+        let changed = ufrag_pwd.remote_ufrag != remote_ufrag || ufrag_pwd.remote_pwd != remote_pwd;
         ufrag_pwd.remote_ufrag = remote_ufrag;
         ufrag_pwd.remote_pwd = remote_pwd;
+        if changed {
+            self.port_discovery.lock().await.reset();
+        }
         Ok(())
     }
 
@@ -1315,7 +1334,7 @@ impl AgentInternal {
         }
     }
 
-    fn observe(&self, kind: CandidateType, event: ConnectivityEvent) {
+    pub(super) fn observe(&self, kind: CandidateType, event: ConnectivityEvent) {
         if let Some(observer) = &self.connectivity_observer {
             observer(kind, event);
         }

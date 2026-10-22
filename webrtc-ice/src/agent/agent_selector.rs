@@ -160,6 +160,7 @@ impl AgentInternal {
     }
 
     pub(crate) async fn start(&self) {
+        self.port_discovery.lock().await.reset();
         if self.is_controlling.load(Ordering::SeqCst) {
             ControllingSelector::start(self).await;
         } else {

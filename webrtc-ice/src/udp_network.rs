@@ -18,6 +18,8 @@ pub enum ConnectivityEvent {
     IntegrityRejected,
     UnknownRemoteResponse,
     SendError,
+    PortDiscoveryProbe,
+    PortDiscoveryAuthenticated,
 }
 
 /// Per-candidate lifecycle evidence. Ports and a local opaque key are enough
@@ -211,9 +213,19 @@ pub struct EphemeralUDP {
     port_max: u16,
     socket_factory: Option<UdpSocketFactory>,
     connectivity_observer: Option<ConnectivityObserver>,
+    bounded_port_discovery: bool,
 }
 
 impl EphemeralUDP {
+    /// Opt in only for an authorized peer's IPv4 server-reflexive candidates.
+    /// This sends a small, paced set of authenticated ICE checks near the
+    /// advertised ports. Guesses are never inserted into the ICE checklist.
+    pub fn set_bounded_port_discovery(&mut self, enabled: bool) {
+        self.bounded_port_discovery = enabled;
+    }
+    pub fn bounded_port_discovery(&self) -> bool {
+        self.bounded_port_discovery
+    }
     pub fn set_connectivity_observer(&mut self, observer: ConnectivityObserver) {
         self.connectivity_observer = Some(observer);
     }

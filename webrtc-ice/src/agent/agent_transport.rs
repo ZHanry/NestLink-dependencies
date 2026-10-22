@@ -38,6 +38,7 @@ impl Agent {
             tokio::select! {
                 _ = on_connected_rx.recv() => {},
                 _ = cancel_rx.recv() => {
+                    self.internal.port_discovery.lock().await.stop();
                     return Err(Error::ErrCanceledByCaller);
                 }
             }
@@ -73,6 +74,7 @@ impl Agent {
             tokio::select! {
                 _ = on_connected_rx.recv() => {},
                 _ = cancel_rx.recv() => {
+                    self.internal.port_discovery.lock().await.stop();
                     return Err(Error::ErrCanceledByCaller);
                 }
             }

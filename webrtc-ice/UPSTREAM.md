@@ -77,3 +77,27 @@ exporting error text. Already-flattened upstream errors remain unknown. Regressi
 tests exercise real receiver I/O failure, normal completion versus Tokio task
 abort, and nested typed errors; NestLink's actual UDP/ICE tests cover readiness,
 authentication rejection, accepted writes and closing before connection.
+
+0.7 RC bounded NAT port discovery: `EphemeralUDP` has an explicit, disabled-by-
+default opt-in for authorized native-host sessions. Once ordinary checks are
+underway, it can probe at most 32 neighboring ports on each of at most two
+signaled public IPv4 srflx addresses, from at most six retained local srflx
+sockets. The complete generation has a 384-packet limit, batches of at most 12
+per 200ms, a 750ms initial wait and a seven-second discovery window. It never
+probes relay/private addresses or inserts guessed endpoints into the checklist.
+Discovery requests carry the ordinary ICE username, role, priority, integrity
+and fingerprint. Responses pass normal integrity validation, then must match
+the pending transaction, exact source and original local socket within four
+seconds. Only then may a peer-reflexive candidate be created. Ordinary checks
+and nomination remain necessary before use. Selection, cancellation, restart,
+credential changes and teardown discard or stop the bounded generation.
+
+Production-source regressions use two separate routed virtual LANs: stable
+mapping with source-port filtering on one side, and destination-address/port
+dependent mapping/filtering on the other. Ordinary candidates time out; opt-in
+discovery connects and transfers data in both directions without a relay.
+Other regressions check bounds, pacing, disabled defaults, signature/source/
+transaction/socket rejection, expiry and generation reset. NestLink's SDK also
+tests the pinned public API, cancellation, and no further probing after pair
+selection or teardown. These tests and a separate successful independent probe
+on the original networks do not replace original Edge desktop/input acceptance.
