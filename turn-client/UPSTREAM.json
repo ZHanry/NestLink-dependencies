@@ -1,0 +1,337 @@
+{
+  "schema_version": 1,
+  "package": "turn",
+  "version": "0.11.0",
+  "repository": "https://github.com/webrtc-rs/webrtc",
+  "archive_sha256": "5ed995882f66ab94238de77c62e5e778389698ab700afa4696f4754da8f457cb",
+  "published_archive": "UPSTREAM.crate",
+  "vcs": {
+    "git": {
+      "sha1": "a1f8f1919235d8452835852e018efd654f2f8366"
+    },
+    "path_in_vcs": "turn"
+  },
+  "original_archive_files": [
+    {
+      "path": ".cargo_vcs_info.json",
+      "sha256": "d91a79b585594aede6a7e8439fcf175a553f440711ee2c46a685d5719c27e0b1"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "85d5047aaa22f2dca07862af68a3a6519024224b0536358b9507842737dc8ac1"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "1329b9c7bc719af8b995fc8b609e78a4f7e671fdb4220789f9c4c476145ccbf8"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "435af126e59949909fa539211f2a5342ae87686e89ba7b27a14343756c992182"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "6bc11b812c9ffc7afb38a2bc75e799a64a9444173091da17114a6e8e64a73313"
+    },
+    {
+      "path": "Cargo.toml.orig",
+      "sha256": "f2fa29305d46aee7d93e0ee9d8f444e6fcd0a11e7394e1c953d7c653916f4d66"
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "path": "LICENSE-MIT",
+      "sha256": "56cc6c08157f4faf70d351b3a7ceac143399d5359a78c180e06dcd0390784f4d"
+    },
+    {
+      "path": "README.md",
+      "sha256": "b5601848ae81cf407473f65081674f33d0bf5ee20362713ae27b7e5d2f40d62e"
+    },
+    {
+      "path": "benches/bench.rs",
+      "sha256": "a79722864f5bf62f034d1cf635ed3c8668471854f396098a8538c555801295dd"
+    },
+    {
+      "path": "codecov.yml",
+      "sha256": "e13c441bce3e421c3e677d59fdc57289efe04d20aea45f61a547e570f2a14432"
+    },
+    {
+      "path": "doc/webrtc.rs.png",
+      "sha256": "a83b1467436a2acac0e4055f24bca4dd8a58371101ed189a0481e31b8eaaeff7"
+    },
+    {
+      "path": "examples/turn_client_udp.rs",
+      "sha256": "8b277ea1edd443dc53993f407b2335ec6cbb193d56433775c70740e313480e3a"
+    },
+    {
+      "path": "examples/turn_server_udp.rs",
+      "sha256": "e550673efef86f8f4c33de009ca44f623fc7cdc250e9af60c57510df313f8847"
+    },
+    {
+      "path": "src/allocation/allocation_manager/allocation_manager_test.rs",
+      "sha256": "f6d15acbac910447949f28ee0fe67718bbc2c70f7109b3949590695d1a34f641"
+    },
+    {
+      "path": "src/allocation/allocation_manager.rs",
+      "sha256": "b768039a1908d6d250888928697fd59dbc486e38ace67a1ba18ddbbe4da87e09"
+    },
+    {
+      "path": "src/allocation/allocation_test.rs",
+      "sha256": "c1c4519416513233e0e2c213e011bb9ebcc0a57eb0e5050431ef08fe251ef581"
+    },
+    {
+      "path": "src/allocation/channel_bind/channel_bind_test.rs",
+      "sha256": "a387792a413c39f0a05c2e9fecfd557440d94f006e9be7a9dfdb681818d5312e"
+    },
+    {
+      "path": "src/allocation/channel_bind.rs",
+      "sha256": "d13aa81ab71956c7bcd7ac80593426340c74f79c98928d92a8d6292b22d4bde5"
+    },
+    {
+      "path": "src/allocation/five_tuple/five_tuple_test.rs",
+      "sha256": "3455a421cc59f7d7f42a69b44c1e1440d04d85db83fa2f0d3fa90dc0ec6b3591"
+    },
+    {
+      "path": "src/allocation/five_tuple.rs",
+      "sha256": "552a891177262eaefcafbfefdb715a78c8cc78a590b113f195b0da2242906511"
+    },
+    {
+      "path": "src/allocation/mod.rs",
+      "sha256": "ba090ed1bf1e1edaf7e348f1d13a2ea54bec651a3837718ea23e56fe79730067"
+    },
+    {
+      "path": "src/allocation/permission.rs",
+      "sha256": "bfa7be171eb348bdc8ea370d412a2a93d506abbdbc5cb61df4b2d99506ebf89b"
+    },
+    {
+      "path": "src/auth/auth_test.rs",
+      "sha256": "1278f8cf1e73e78a46df6cc5d6b11464ba7ba67a77d4d8e5b18756ceb6bae1a9"
+    },
+    {
+      "path": "src/auth/mod.rs",
+      "sha256": "6b871d5aa551d812584e974a778488496af3cdfc14d69ac0b0daa30831abd65c"
+    },
+    {
+      "path": "src/client/binding/binding_test.rs",
+      "sha256": "1f22cdec19f4ab6f08c822c8937ae53f98d520a60485ca156b31bb54914f8b36"
+    },
+    {
+      "path": "src/client/binding.rs",
+      "sha256": "f92cb2e6c912a80f954c4d6b8eae28b7d4dd8985e7a590447ceeb38a747ac75c"
+    },
+    {
+      "path": "src/client/client_test.rs",
+      "sha256": "3ed4aec5b7338d79a16c785cd57704d02f5e4d4295b82b68ad364cb1af3a720e"
+    },
+    {
+      "path": "src/client/mod.rs",
+      "sha256": "bb268529b11967da46674fb95562f51e1e9673c3f042230ac930ca8aa8af9628"
+    },
+    {
+      "path": "src/client/periodic_timer/periodic_timer_test.rs",
+      "sha256": "2fc9255bb0ae839148a2a52bf61eaf3a5783acfe4ee47404f98979adf1f37c93"
+    },
+    {
+      "path": "src/client/periodic_timer.rs",
+      "sha256": "dd5428c1ce9edf61ffcbdd239270125616df2012192ec7df75a4d035bbdf74ab"
+    },
+    {
+      "path": "src/client/permission.rs",
+      "sha256": "8409b6a60a27fa4e0f07a4226252eb57d3cffa22a9b100cafecd4b0949633619"
+    },
+    {
+      "path": "src/client/relay_conn/relay_conn_test.rs",
+      "sha256": "32673cd3372fa0c60e389c3bab489346417170b1461df0d0bb0026a620698ec6"
+    },
+    {
+      "path": "src/client/relay_conn.rs",
+      "sha256": "ad32ca7e228db2a2152eb4987af8ad1fa19d0846b55c51eb674bee873db939a6"
+    },
+    {
+      "path": "src/client/transaction.rs",
+      "sha256": "2ecae01c7d23e8ab893fbff6373c3eedf25355aa71de4a12c49157c582c272a9"
+    },
+    {
+      "path": "src/error.rs",
+      "sha256": "cd300732244be2ba3cc590c2e194d873b8b0091b2498b3cd9cecc5071785ab8c"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "7d58eeda75d630b9a8ad2b5a261bef70217f94950f4bb47664b84d2c35737b7e"
+    },
+    {
+      "path": "src/proto/addr/addr_test.rs",
+      "sha256": "1d8c7171feea94dc33515343c1706d592d218c7399098e4f4479a7f7cba56a21"
+    },
+    {
+      "path": "src/proto/addr.rs",
+      "sha256": "09c84ab2412bb0717703616b3c079cb3ca69c6aca723dc4c9b0c41fea6ff1e84"
+    },
+    {
+      "path": "src/proto/chandata/chandata_test.rs",
+      "sha256": "f22f844b04de82b9cd3515d2b058158f68069deffb7c009a9ac0684de29483c8"
+    },
+    {
+      "path": "src/proto/chandata.rs",
+      "sha256": "afab0069ffc8bac7e4a10a67501cc2756accda49a963bde9b788f7858696f25e"
+    },
+    {
+      "path": "src/proto/channum/channnum_test.rs",
+      "sha256": "35472ae153cce3dc55db58fa38addb133f09ceaf1f944d5674676e6c248538b5"
+    },
+    {
+      "path": "src/proto/channum.rs",
+      "sha256": "fe7bc96e086112cfa9211cea75d8ea72ee5610c7b585917a93aa3b8118b37e82"
+    },
+    {
+      "path": "src/proto/data/data_test.rs",
+      "sha256": "06a6d5695eae2518e09c5d5baf2a70793aa3c9c093afa33a2aef23ab3ca4a9e8"
+    },
+    {
+      "path": "src/proto/data.rs",
+      "sha256": "130154e855e88153682a4183ff71504fc204e5f98a245a63e5467522623ae5bd"
+    },
+    {
+      "path": "src/proto/dontfrag/dontfrag_test.rs",
+      "sha256": "91d53555cbbc557ce528e65ec249dfcc7d4e52f3501bfec9177447cefbbc6884"
+    },
+    {
+      "path": "src/proto/dontfrag.rs",
+      "sha256": "54cba549ae8dd8e1b92886bd4961d3e565fd796beb941b81a99de0f9bb1ae346"
+    },
+    {
+      "path": "src/proto/evenport/evenport_test.rs",
+      "sha256": "a925f4b09e81de1b5dc31fc24e23dd180242279f4ac211d41c70f43dd2f2b475"
+    },
+    {
+      "path": "src/proto/evenport.rs",
+      "sha256": "683a2f17484572f76f9d7ced2de72907786a8b73e3d94cc84deee4dfdeca0f48"
+    },
+    {
+      "path": "src/proto/lifetime/lifetime_test.rs",
+      "sha256": "c0d8c0dc5a924053793dff37e7a861f548c48d459cea9afbc4abb7c244e9d903"
+    },
+    {
+      "path": "src/proto/lifetime.rs",
+      "sha256": "a4a7f90890dd89bef80a09d4a2c964ab27d0a3c89740efe5c4b890e6d13461e6"
+    },
+    {
+      "path": "src/proto/mod.rs",
+      "sha256": "e0221632868878a25f72355c708bd3132ca3f1b9702a3eb25e30104ec7968fe1"
+    },
+    {
+      "path": "src/proto/peeraddr/peeraddr_test.rs",
+      "sha256": "6baf9f064095658ab5129dedf0b1efa3a34175e525fb7e00a8d1fc7b5e8ebfb4"
+    },
+    {
+      "path": "src/proto/peeraddr.rs",
+      "sha256": "97783619a0a0186bcdaabc302c037a9b63bb40fdfe157894017ab970a60fd0dd"
+    },
+    {
+      "path": "src/proto/proto_test.rs",
+      "sha256": "685b92451727c55999e647396438deb0e8c8e4faf586d27aa76e0608e30beff9"
+    },
+    {
+      "path": "src/proto/relayaddr/relayaddr_test.rs",
+      "sha256": "66e35e6462e0af535cbc18f762857e4a20106499ab131ce72edf8ff197d9b420"
+    },
+    {
+      "path": "src/proto/relayaddr.rs",
+      "sha256": "09f649fae65fd4672cd29ff8d8c604425e29c617a3eaac5e5a51cc2cccb1fa77"
+    },
+    {
+      "path": "src/proto/reqfamily/reqfamily_test.rs",
+      "sha256": "a29ca6f5e34f503c63e7428f3c7fc6e40e6a16a29bbae245d9b680ac227b571f"
+    },
+    {
+      "path": "src/proto/reqfamily.rs",
+      "sha256": "13243a025d50fa912ab88ca61e7e8c4136f87f2149630fa997e0ac47177f6a22"
+    },
+    {
+      "path": "src/proto/reqtrans/reqtrans_test.rs",
+      "sha256": "6a41e188a36f0216846a4e695fe044e6c6ecdf1f6057844b3ea67ee3aa8432c0"
+    },
+    {
+      "path": "src/proto/reqtrans.rs",
+      "sha256": "14cc86beecfd6bee3cc380ad6ffe0b7c4f8367d7c1f88af83440e45d093738c4"
+    },
+    {
+      "path": "src/proto/rsrvtoken/rsrvtoken_test.rs",
+      "sha256": "e310e9b192b261694807e815402e7bb1c6a8211f8c538831badb7968a52e293f"
+    },
+    {
+      "path": "src/proto/rsrvtoken.rs",
+      "sha256": "fb3344ace520b8891d26841042a8df3c0a246ea6a3442c255f05fbade63e90d0"
+    },
+    {
+      "path": "src/relay/mod.rs",
+      "sha256": "85bd04db474213bfafedf7a98ea8ef6154d6f6ec40fe27dcf7d4c7574faaaaeb"
+    },
+    {
+      "path": "src/relay/relay_none.rs",
+      "sha256": "e4939ce700efc5e6f5b20f9898d72d69c965f116b12ed47671d993849923f332"
+    },
+    {
+      "path": "src/relay/relay_range.rs",
+      "sha256": "004ae3b244853808e51821d4a534604cdc5fbbf09c62dd846489eef63ad81be6"
+    },
+    {
+      "path": "src/relay/relay_static.rs",
+      "sha256": "49dad6d4a4182ef6a3d4692caa3d48a73ba68ec8fa87771cf82939e2c1b511ee"
+    },
+    {
+      "path": "src/server/config.rs",
+      "sha256": "4cb56a7fc1925e1d1fd9519990df3063e1a544d316d77f93673f90892acd2f52"
+    },
+    {
+      "path": "src/server/mod.rs",
+      "sha256": "0e1967b196883f50d3b64236fb454e7d6319ac8164192f52e29a82589f765ae7"
+    },
+    {
+      "path": "src/server/request/request_test.rs",
+      "sha256": "6d45b385bf01b079158fb8c9c49384d39b3d40fb6af41934212790c6a452e110"
+    },
+    {
+      "path": "src/server/request.rs",
+      "sha256": "31f5bb503f96982fbdb4272b0b2ac975507541827407c16b7b13a555b3bbfb91"
+    },
+    {
+      "path": "src/server/server_test.rs",
+      "sha256": "3ef7b9eafd8bbfa58b768f870543baea2eb09dee9b021244789c6fc44b82a02c"
+    }
+  ],
+  "local_changes": [
+    {
+      "path": "Cargo.toml",
+      "original_sha256": "6bc11b812c9ffc7afb38a2bc75e799a64a9444173091da17114a6e8e64a73313",
+      "sha256": "0791001a67de78788fc3e90028f22ac0a3ef5f0a4f7e5b8c413c0b5c4a1c3958"
+    },
+    {
+      "path": "codecov.yml",
+      "original_sha256": "e13c441bce3e421c3e677d59fdc57289efe04d20aea45f61a547e570f2a14432",
+      "sha256": "82497e2d3525a06d59f972e7b343c3a76e386017e659af9e22daeb1ad325f699"
+    },
+    {
+      "path": "src/client/relay_conn/relay_contract_tests.rs",
+      "original_sha256": null,
+      "sha256": "82ecee2e52bf484b166734004a5fea38da7fbe5b74a76c06428991b634e4d83c"
+    },
+    {
+      "path": "src/client/relay_conn.rs",
+      "original_sha256": "ad32ca7e228db2a2152eb4987af8ad1fa19d0846b55c51eb674bee873db939a6",
+      "sha256": "8fbb282060130fa0ce91cf2ec10ba8aad259a985c2d6541bda55255cb283e663"
+    },
+    {
+      "path": "tests/public_relay_contract.rs",
+      "original_sha256": null,
+      "sha256": "67dffdc59c9037e3049b6c29f4f0f60936a42f0f81ad403fd883fa7b749266b8"
+    },
+    {
+      "path": "UPSTREAM.md",
+      "original_sha256": null,
+      "sha256": "3223decd14d411d2f5f0f8b0f64c14bc6e3463dc8323f90eb5957bcddc1b9dae"
+    }
+  ],
+  "license_review_basis": "Original MIT and Apache-2.0 full texts retained from the already attributed webrtc-rs TURN fork; upstream package declaration remains MIT OR Apache-2.0."
+}

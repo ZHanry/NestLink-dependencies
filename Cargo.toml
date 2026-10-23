@@ -1,3 +1,4 @@
 [workspace]
 resolver = "2"
 members = ["turn", "webrtc-ice", "leptos_macro", "tachys", "objc2-foundation"]
+exclude = ["turn-client"]

@@ -23,5 +23,13 @@
     "package": "objc2-foundation",
     "upstream_commit": "e282618be4c3a3b9542957e0c8540e9588472ce8",
     "upstream_path": "framework-crates/objc2-foundation"
+  },
+  {
+    "package": "turn",
+    "version": "0.11.0",
+    "directory": "turn-client",
+    "upstream_commit": "a1f8f1919235d8452835852e018efd654f2f8366",
+    "upstream_path": "turn",
+    "archive_sha256": "5ed995882f66ab94238de77c62e5e778389698ab700afa4696f4754da8f457cb"
   }
 ]
