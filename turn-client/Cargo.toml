@@ -120,3 +120,7 @@ version = "0.11.3"
 version = "0.4"
 
 [workspace]
+
+[[test]]
+name = "public_relay_contract"
+path = "tests/public_relay_contract.rs"

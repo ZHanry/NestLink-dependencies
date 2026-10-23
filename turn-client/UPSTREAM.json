@@ -305,7 +305,7 @@
     {
       "path": "Cargo.toml",
       "original_sha256": "6bc11b812c9ffc7afb38a2bc75e799a64a9444173091da17114a6e8e64a73313",
-      "sha256": "0791001a67de78788fc3e90028f22ac0a3ef5f0a4f7e5b8c413c0b5c4a1c3958"
+      "sha256": "2f5d321e9a5d376a02663815dadd7167bbf19ac94b8f8da4a75ec96abbb4a8ab"
     },
     {
       "path": "codecov.yml",
