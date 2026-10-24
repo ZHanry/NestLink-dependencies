@@ -1,0 +1,24 @@
+name: DTLS security contract
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dtls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f
+        with:
+          toolchain: '1.96.0'
+      - name: Resolve patched arithmetic family on GitHub
+        run: cargo update --manifest-path dtls/Cargo.toml
+      - name: Full upstream and security regression tests
+        run: cargo test --manifest-path dtls/Cargo.toml --lib --locked
+      - name: Record resolved graph
+        run: cargo tree --manifest-path dtls/Cargo.toml --locked

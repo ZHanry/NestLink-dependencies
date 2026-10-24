@@ -31,5 +31,13 @@
     "upstream_commit": "a1f8f1919235d8452835852e018efd654f2f8366",
     "upstream_path": "turn",
     "archive_sha256": "5ed995882f66ab94238de77c62e5e778389698ab700afa4696f4754da8f457cb"
+  },
+  {
+    "package": "dtls",
+    "version": "0.13.0",
+    "directory": "dtls",
+    "upstream_commit": "a1f8f1919235d8452835852e018efd654f2f8366",
+    "upstream_path": "dtls",
+    "archive_sha256": "f531dd7c181beaf3cebab3716afa4d0d41ab888be85232583f56bbaf07ca208a"
   }
 ]

@@ -14,6 +14,7 @@ inventories. Read each package's UPSTREAM.md before changing it.
 | --- | --- | --- |
 | turn 0.17.2 | webrtc-rs/webrtc | Allocation policy/peer hooks, close callback, bounded stream buffer |
 | turn 0.11.0 (`turn-client/`) | webrtc-rs/webrtc | Payload send lengths, complete datagram validation and typed client errors |
+| dtls 0.13.0 (`dtls/`) | webrtc-rs/webrtc | P256/P384 arithmetic upgrade for RUSTSEC-2026-0387, authenticated handshake and signature regressions |
 | webrtc-ice 0.14.0 | webrtc-rs/webrtc | Managed TURN TCP/TLS transport support |
 | leptos_macro 0.8.19 | leptos-rs/leptos | Use existing convert_case naming predicates |
 | tachys 0.2.19 | leptos-rs/leptos | Checked standard-library type erasure |
